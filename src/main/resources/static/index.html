@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Feedback System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            color: #333;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        h2:first-of-type {
+            margin-top: 0;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        textarea {
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #5568d3;
+        }
+
+        button[onclick="deleteFeedback"] {
+            background-color: #e74c3c;
+        }
+
+        button[onclick="deleteFeedback"]:hover {
+            background-color: #c0392b;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        #searchCourse {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        thead {
+            background-color: #667eea;
+            color: white;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        hr {
+            margin: 30px 0;
+            border: none;
+            border-top: 2px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Submit Feedback</h2>
+
+        <form id="feedbackForm">
+            <input type="text" id="name" placeholder="Student Name" required>
+            <input type="text" id="course" placeholder="Course" required>
+            <input type="number" id="rating" placeholder="Rating (1-5)" min="1" max="5" required>
+            <textarea id="comments" placeholder="Comments" required></textarea>
+            <button type="submit">Submit</button>
+        </form>
+
+        <hr>
+        <h2>All Feedback</h2>
+
+        <div class="search-bar">
+            <input type="text" id="searchCourse" placeholder="Search by course">
+            <button onclick="searchCourse()">Search</button>
+            <button onclick="loadFeedback()">Reset</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Student</th>
+                    <th>Course</th>
+                    <th>Rating</th>
+                    <th>Comments</th>
+                    <th colspan="2">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="feedbackTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API = "http://localhost:9090/feedback";
+
+        async function deleteFeedback(id) {
+            await fetch(API + "/" + id, { method: "DELETE" });
+            await loadFeedback();
+        }
+
+        let editId = null;
+
+        function editFeedback(id) {
+            editId = id;
+            const row = [...document.querySelectorAll("#feedbackTable tr")].find(r => r.children[0]?.innerText == String(id));
+            if (!row) return;
+            document.getElementById("name").value = row.children[1].innerText;
+            document.getElementById("course").value = row.children[2].innerText;
+            document.getElementById("rating").value = row.children[3].innerText;
+            document.getElementById("comments").value = row.children[4].innerText;
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        document.getElementById("feedbackForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            const data = {
+                studentName: document.getElementById("name").value,
+                course: document.getElementById("course").value,
+                rating: Number(document.getElementById("rating").value),
+                comments: document.getElementById("comments").value
+            };
+
+            if (editId) {
+                await fetch(API + "/" + editId, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data)
+                });
+                editId = null;
+            } else {
+                await fetch(API, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data)
+                });
+            }
+
+            document.getElementById("feedbackForm").reset();
+            await loadFeedback();
+        });
+
+        async function searchCourse() {
+            const course = document.getElementById("searchCourse").value;
+            const res = await fetch(API + "/search?course=" + encodeURIComponent(course));
+            const data = await res.json();
+            searchCourse.innerText = "";
+            renderTable(data);
+        }
+
+        function renderTable(data) {
+            document.getElementById("feedbackTable").innerHTML =
+                data.map(f => `
+                    <tr>
+                        <td>${f.id}</td>
+                        <td>${f.studentName}</td>
+                        <td>${f.course}</td>
+                        <td>${f.rating}</td>
+                        <td>${f.comments}</td>
+                        <td><button onclick="deleteFeedback(${f.id})">Delete</button></td>
+                        <td><button onclick="editFeedback(${f.id})">Edit</button></td>
+                    </tr>
+                `).join("");
+        }
+
+        async function loadFeedback() {
+            const res = await fetch(API);
+            const data = await res.json();
+            renderTable(data);
+        }
+
+        window.addEventListener("load", loadFeedback);
+    </script>
+</body>
+</html>
